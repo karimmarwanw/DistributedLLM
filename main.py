@@ -1,24 +1,38 @@
-from workers.gpu_worker import GPUWorker
-from lb.load_balancer import LoadBalancer
-from master.scheduler import Scheduler
-from client.load_generator import run_load_test
+print("""
+Run each service in a separate terminal.
+
+Workers:
+
+1) Worker 0 under Master 0:
+python -m workers.gpu_worker --id 0 --master-id 0 --port 9001
+
+2) Worker 1 under Master 0:
+python -m workers.gpu_worker --id 1 --master-id 0 --port 9002
+
+3) Worker 2 under Master 1:
+python -m workers.gpu_worker --id 2 --master-id 1 --port 9003
+
+4) Worker 3 under Master 1:
+python -m workers.gpu_worker --id 3 --master-id 1 --port 9004
 
 
-def main():
-    workers = [
-        GPUWorker(worker_id=0),
-        GPUWorker(worker_id=1),
-        GPUWorker(worker_id=2),
-        GPUWorker(worker_id=3)
-    ]
+Masters:
 
-    scheduler = Scheduler(workers)
+5) Master 0:
+python -m master.scheduler --master-id 0 --port 8001 --workers 0:9001 1:9002
 
-    load_balancer = LoadBalancer()
-    load_balancer.attach_scheduler(scheduler)
-
-    run_load_test(load_balancer, num_users=100)
+6) Master 1:
+python -m master.scheduler --master-id 1 --port 8002 --workers 2:9003 3:9004
 
 
-if __name__ == "__main__":
-    main()
+Load Balancer:
+
+7) Load Balancer:
+python -m lb.load_balancer
+
+
+Client:
+
+8) Client:
+python -m client.load_generator
+""")

@@ -1,16 +1,15 @@
-from dataclasses import dataclass
+from pydantic import BaseModel
 
 
-@dataclass
-class Request:
+class RequestModel(BaseModel):
     id: int
     query: str
 
 
-@dataclass
-class Response:
+class ResponseModel(BaseModel):
     id: int
     result: str
-    latency: float
     worker_id: int
-    success: bool = True
+    master_id: int
+    latency: float
+    success: bool

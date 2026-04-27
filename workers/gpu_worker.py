@@ -1,50 +1,68 @@
 import time
-import random
+import argparse
+from fastapi import FastAPI
+import uvicorn
 
-from common.models import Request, Response
+from common.models import RequestModel
 from rag.retriever import retrieve_context
 from llm.inference import run_llm
 
+app = FastAPI()
 
-class GPUWorker:
-    def __init__(self, worker_id: int):
-        self.worker_id = worker_id
-        self.active_tasks = 0
-        self.is_alive = True
+WORKER_ID = 0
+MASTER_ID = 0
+active_tasks = 0
+total_requests = 0
 
-    def process(self, request: Request) -> Response:
-        if not self.is_alive:
-            raise Exception(f"Worker {self.worker_id} is down")
 
-        self.active_tasks += 1
-        start_time = time.time()
+@app.post("/process")
+def process_request(request: RequestModel):
+    global active_tasks, total_requests
 
-        try:
-            print(f"[Worker {self.worker_id}] Processing request {request.id}")
+    active_tasks += 1
+    total_requests += 1
 
-            # rag step
-            context = retrieve_context(request.query)
+    start_time = time.time()
 
-            # llm step
-            result = run_llm(request.query, context)
+    print(f"[Worker {WORKER_ID}] Processing request {request.id}")
 
-            latency = time.time() - start_time
+    context = retrieve_context(request.query)
+    result = run_llm(request.query, context)
 
-            return Response(
-                id=request.id,
-                result=result,
-                latency=latency,
-                worker_id=self.worker_id,
-                success=True
-            )
+    latency = time.time() - start_time
 
-        finally:
-            self.active_tasks -= 1
+    active_tasks -= 1
 
-    def fail(self):
-        self.is_alive = False
-        print(f"[Worker {self.worker_id}] FAILED")
+    return {
+        "id": request.id,
+        "result": result,
+        "worker_id": WORKER_ID,
+        "master_id": MASTER_ID,
+        "latency": latency,
+        "success": True
+    }
 
-    def recover(self):
-        self.is_alive = True
-        print(f"[Worker {self.worker_id}] RECOVERED")
+
+@app.get("/health")
+def health_check():
+    return {
+        "status": "alive",
+        "worker_id": WORKER_ID,
+        "master_id": MASTER_ID,
+        "active_tasks": active_tasks,
+        "total_requests": total_requests
+    }
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--id", type=int, required=True)
+    parser.add_argument("--master-id", type=int, required=True)
+    parser.add_argument("--port", type=int, required=True)
+
+    args = parser.parse_args()
+
+    WORKER_ID = args.id
+    MASTER_ID = args.master_id
+
+    uvicorn.run(app, host="127.0.0.1", port=args.port)

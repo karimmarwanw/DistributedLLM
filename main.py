@@ -35,4 +35,11 @@ Client:
 
 8) Client:
 python -m client.load_generator
+
+
+Change load balancing strategy:
+
+curl -X POST http://127.0.0.1:8000/strategy/round_robin
+curl -X POST http://127.0.0.1:8000/strategy/least_connections
+curl -X POST http://127.0.0.1:8000/strategy/load_aware
 """)

@@ -27,7 +27,7 @@ def process_request(request: RequestModel):
     print(f"[Worker {WORKER_ID}] Processing request {request.id}")
 
     context = retrieve_context(request.query)
-    result = run_llm(request.query, context)
+    result = run_llm(request.query, context, max_tokens=request.max_tokens)
 
     latency = time.time() - start_time
 

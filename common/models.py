@@ -4,6 +4,7 @@ from pydantic import BaseModel
 class RequestModel(BaseModel):
     id: int
     query: str
+    max_tokens: int | None = None
 
 
 class ResponseModel(BaseModel):

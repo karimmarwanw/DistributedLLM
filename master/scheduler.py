@@ -1,4 +1,7 @@
 import argparse
+import os
+import threading
+
 import requests
 from fastapi import FastAPI
 import uvicorn
@@ -10,8 +13,10 @@ app = FastAPI()
 MASTER_ID = 0
 workers = []
 current_worker_index = 0
+worker_index_lock = threading.Lock()
 active_tasks = 0
 total_requests = 0
+WORKER_REQUEST_TIMEOUT = float(os.getenv("WORKER_REQUEST_TIMEOUT", "300"))
 
 
 def get_alive_workers():
@@ -44,8 +49,9 @@ def choose_worker_round_robin():
     if not alive_workers:
         return None
 
-    selected_worker = alive_workers[current_worker_index % len(alive_workers)]
-    current_worker_index += 1
+    with worker_index_lock:
+        selected_worker = alive_workers[current_worker_index % len(alive_workers)]
+        current_worker_index += 1
 
     return selected_worker
 
@@ -79,7 +85,7 @@ def schedule_request(request: RequestModel):
         response = requests.post(
             worker["url"] + "/process",
             json=request.model_dump(),
-            timeout=10
+            timeout=WORKER_REQUEST_TIMEOUT
         )
 
         active_tasks -= 1

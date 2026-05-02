@@ -1,3 +1,6 @@
+import os
+import threading
+
 import requests
 from fastapi import FastAPI
 import uvicorn
@@ -24,8 +27,10 @@ masters = [
 ]
 
 current_master_index = 0
+master_index_lock = threading.Lock()
 
 LOAD_BALANCING_STRATEGY = "round_robin"
+MASTER_REQUEST_TIMEOUT = float(os.getenv("LB_MASTER_TIMEOUT", "300"))
 # Options:
 # "round_robin"
 # "least_connections"
@@ -57,11 +62,15 @@ def update_master_health():
 def choose_master_round_robin(alive_masters):
     global current_master_index
 
-    selected_master = alive_masters[current_master_index % len(alive_masters)]
-    current_master_index += 1
+    with master_index_lock:
+        selected_master = alive_masters[current_master_index % len(alive_masters)]
+        current_master_index += 1
 
     return selected_master
 
+
+def choose_master_least_connections(alive_masters):
+    return min(alive_masters, key=lambda master: master["active_tasks"])
 
 
 def choose_master_load_aware(alive_masters):
@@ -111,7 +120,7 @@ def handle_query(request: RequestModel):
         response = requests.post(
             master["url"] + "/schedule",
             json=request.model_dump(),
-            timeout=15
+            timeout=MASTER_REQUEST_TIMEOUT
         )
 
         return response.json()

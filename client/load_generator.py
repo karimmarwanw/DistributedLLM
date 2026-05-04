@@ -29,7 +29,7 @@ def send_request(
 ):
     payload = {
         "id": request_id,
-        "query": f"{query} Request {request_id}"
+        "query": query
     }
 
     if max_tokens:
@@ -79,6 +79,9 @@ def run_load_test(
     result_chars=220,
     max_tokens=None
 ):
+    if result_chars <= 0:
+        result_chars = 1_000_000
+
     threads = []
     lock = threading.Lock()
     results = {
@@ -154,7 +157,17 @@ if __name__ == "__main__":
         type=int,
         help="Request a larger Ollama generation only for this load test."
     )
+    parser.add_argument(
+        "--full-answer",
+        action="store_true",
+        help="Request and print a complete LLM answer for demo queries."
+    )
     args = parser.parse_args()
+
+    if args.full_answer:
+        args.show_results = True
+        args.max_tokens = args.max_tokens or 900
+        args.result_chars = 0
 
     run_load_test(
         num_users=args.users,

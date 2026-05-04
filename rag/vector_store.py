@@ -14,6 +14,14 @@ QDRANT_URL = os.getenv("QDRANT_URL")
 DEFAULT_TOP_K = int(os.getenv("RAG_TOP_K", "3"))
 DEFAULT_CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "700"))
 DEFAULT_CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "120"))
+MIN_KEYWORD_OVERLAP = int(os.getenv("RAG_MIN_KEYWORD_OVERLAP", "1"))
+
+STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "but", "by", "can", "does",
+    "for", "from", "how", "i", "in", "is", "it", "of", "on", "or", "that",
+    "the", "their", "there", "this", "to", "using", "what", "when", "where",
+    "why", "with", "your"
+}
 
 
 def get_client():
@@ -38,6 +46,21 @@ def ensure_collection(client):
 
 def tokenize(text):
     return re.findall(r"[a-zA-Z0-9]+", text.lower())
+
+
+def keyword_set(text):
+    return {
+        token
+        for token in tokenize(text)
+        if len(token) > 2 and token not in STOPWORDS
+    }
+
+
+def keyword_overlap(query, text):
+    query_keywords = keyword_set(query)
+    text_keywords = keyword_set(text)
+
+    return len(query_keywords.intersection(text_keywords))
 
 
 def embed_text(text):
@@ -127,15 +150,24 @@ def search_documents(query, top_k=DEFAULT_TOP_K):
             limit=top_k
         )
 
-        return [
-            {
+        matches = []
+
+        for point in response.points:
+            text = point.payload.get("text", "")
+            overlap = keyword_overlap(query, text)
+
+            if overlap < MIN_KEYWORD_OVERLAP:
+                continue
+
+            matches.append({
                 "score": point.score,
+                "keyword_overlap": overlap,
                 "source": point.payload.get("source", "unknown"),
                 "chunk_index": point.payload.get("chunk_index", 0),
-                "text": point.payload.get("text", "")
-            }
-            for point in response.points
-        ]
+                "text": text
+            })
+
+        return matches
     finally:
         client.close()
 
@@ -144,13 +176,14 @@ def retrieve_context(query, top_k=DEFAULT_TOP_K):
     matches = search_documents(query, top_k=top_k)
 
     if not matches:
-        return f"No VectorDB context found for query: {query}"
+        return f"No relevant VectorDB context found for query: {query}"
 
     context_parts = []
 
     for match in matches:
         context_parts.append(
-            f"[source={match['source']} score={match['score']:.3f}] "
+            f"[source={match['source']} score={match['score']:.3f} "
+            f"keyword_overlap={match['keyword_overlap']}] "
             f"{match['text']}"
         )
 

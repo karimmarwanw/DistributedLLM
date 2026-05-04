@@ -13,4 +13,6 @@ class ResponseModel(BaseModel):
     worker_id: int
     master_id: int
     latency: float
+    gpu_utilization_percent: float | None = None
+    gpu_capacity: int | None = None
     success: bool

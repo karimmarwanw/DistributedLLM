@@ -8,6 +8,13 @@ LB_URL = "http://127.0.0.1:8000/query"
 REQUEST_TIMEOUT = 120
 
 
+def format_gpu_utilization(value):
+    if value is None:
+        return "N/A"
+
+    return f"{float(value):.1f}%"
+
+
 def format_result_preview(result, max_length):
     one_line_result = " ".join(result.split())
 
@@ -44,11 +51,13 @@ def send_request(
         data = response.json()
 
         if data.get("success"):
+            gpu_utilization = data.get("gpu_utilization_percent")
             print(
                 f"[Client] Request {request_id} | "
                 f"Master {data['master_id']} | "
                 f"Worker {data['worker_id']} | "
-                f"Total Latency: {total_latency:.3f}s"
+                f"Total Latency: {total_latency:.3f}s | "
+                f"GPU Utilization: {format_gpu_utilization(gpu_utilization)}"
             )
             if show_results:
                 print(
@@ -60,6 +69,8 @@ def send_request(
                 results["latencies"].append(total_latency)
                 results["masters"].append(data["master_id"])
                 results["workers"].append(data["worker_id"])
+                if gpu_utilization is not None:
+                    results["gpu_utilizations"].append(float(gpu_utilization))
         else:
             print(f"[Client] Request {request_id} failed: {data.get('result')}")
             with lock:
@@ -88,6 +99,7 @@ def run_load_test(
         "latencies": [],
         "masters": [],
         "workers": [],
+        "gpu_utilizations": [],
         "failures": 0
     }
 
@@ -120,15 +132,36 @@ def run_load_test(
     print(f"Successful requests: {len(results['latencies'])}")
     print(f"Failed requests: {results['failures']}")
     print(f"Total time: {total_time:.3f}s")
+    successful_requests = len(results["latencies"])
+    throughput = successful_requests / total_time if total_time > 0 else 0.0
+    print(f"Throughput: {throughput:.2f} requests/second")
 
     if results["latencies"]:
         latencies = results["latencies"]
         print(f"Average latency: {sum(latencies) / len(latencies):.3f}s")
         print(f"Min latency: {min(latencies):.3f}s")
         print(f"Max latency: {max(latencies):.3f}s")
-        print(f"Throughput: {len(latencies) / total_time:.2f} requests/second")
         print(f"Master distribution: {dict(Counter(results['masters']))}")
         print(f"Worker distribution: {dict(Counter(results['workers']))}")
+    else:
+        print("Average latency: N/A")
+        print("Min latency: N/A")
+        print("Max latency: N/A")
+        print("Master distribution: {}")
+        print("Worker distribution: {}")
+
+    if results["gpu_utilizations"]:
+        gpu_utilizations = results["gpu_utilizations"]
+        print(
+            "Average GPU utilization: "
+            f"{sum(gpu_utilizations) / len(gpu_utilizations):.1f}%"
+        )
+        print(f"Min GPU utilization: {min(gpu_utilizations):.1f}%")
+        print(f"Max GPU utilization: {max(gpu_utilizations):.1f}%")
+    else:
+        print("Average GPU utilization: N/A")
+        print("Min GPU utilization: N/A")
+        print("Max GPU utilization: N/A")
 
     print("==================================")
 

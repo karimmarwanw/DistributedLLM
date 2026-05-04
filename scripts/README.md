@@ -29,6 +29,8 @@ Run all scripts from the project root or directly by path.
 ./scripts/test_strategies.sh 100
 ```
 
+Inference test output includes latency, throughput, simulated GPU utilization, master distribution, and worker distribution.
+
 ## Fault Tolerance
 
 Worker fails while processing, then Master 0 retries Worker 1:

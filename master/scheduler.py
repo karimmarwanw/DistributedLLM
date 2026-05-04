@@ -16,6 +16,7 @@ current_worker_index = 0
 worker_index_lock = threading.Lock()
 active_tasks = 0
 total_requests = 0
+metrics_lock = threading.Lock()
 WORKER_REQUEST_TIMEOUT = float(os.getenv("WORKER_REQUEST_TIMEOUT", "300"))
 failure_lock = threading.Lock()
 fail_during_next_schedule = False
@@ -45,6 +46,29 @@ def crash_master_after_delay(delay, reason):
     timer.start()
 
 
+def begin_task():
+    global active_tasks, total_requests
+
+    with metrics_lock:
+        active_tasks += 1
+        total_requests += 1
+
+
+def end_task():
+    global active_tasks
+
+    with metrics_lock:
+        active_tasks = max(0, active_tasks - 1)
+
+
+def current_metrics():
+    with metrics_lock:
+        return {
+            "active_tasks": active_tasks,
+            "total_requests": total_requests
+        }
+
+
 def get_alive_workers(excluded_worker_ids=None):
     excluded_worker_ids = excluded_worker_ids or set()
     alive_workers = []
@@ -61,6 +85,10 @@ def get_alive_workers(excluded_worker_ids=None):
                 worker["alive"] = True
                 worker["active_tasks"] = data.get("active_tasks", 0)
                 worker["total_requests"] = data.get("total_requests", 0)
+                worker["gpu_utilization_percent"] = data.get(
+                    "gpu_utilization_percent", 0
+                )
+                worker["gpu_capacity"] = data.get("gpu_capacity")
                 alive_workers.append(worker)
             else:
                 worker["alive"] = False
@@ -92,10 +120,7 @@ def mark_worker_failed(worker):
 
 @app.post("/schedule")
 def schedule_request(request: RequestModel):
-    global active_tasks, total_requests
-
-    active_tasks += 1
-    total_requests += 1
+    begin_task()
 
     print(f"[Master {MASTER_ID}] Received request {request.id}")
 
@@ -155,7 +180,7 @@ def schedule_request(request: RequestModel):
                     f"request {request.id}. Retrying another worker."
                 )
     finally:
-        active_tasks -= 1
+        end_task()
 
 
 @app.post("/simulate/fail-during-next-schedule")
@@ -183,11 +208,12 @@ def simulate_fail_during_next_schedule(
 
 @app.get("/health")
 def health_check():
+    metrics = current_metrics()
+
     return {
         "status": "alive",
         "master_id": MASTER_ID,
-        "active_tasks": active_tasks,
-        "total_requests": total_requests,
+        **metrics,
         "workers": get_alive_workers()
     }
 

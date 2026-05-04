@@ -15,19 +15,24 @@ masters = [
         "url": "http://127.0.0.1:8001",
         "alive": True,
         "active_tasks": 0,
-        "total_requests": 0
+        "total_requests": 0,
+        "in_flight": 0,
+        "assigned_requests": 0
     },
     {
         "id": 1,
         "url": "http://127.0.0.1:8002",
         "alive": True,
         "active_tasks": 0,
-        "total_requests": 0
+        "total_requests": 0,
+        "in_flight": 0,
+        "assigned_requests": 0
     }
 ]
 
 current_master_index = 0
 master_index_lock = threading.Lock()
+master_state_lock = threading.Lock()
 
 LOAD_BALANCING_STRATEGY = "round_robin"
 MASTER_REQUEST_TIMEOUT = float(os.getenv("LB_MASTER_TIMEOUT", "300"))
@@ -50,17 +55,29 @@ def update_master_health(excluded_master_ids=None):
 
             if response.status_code == 200:
                 data = response.json()
-                master["alive"] = True
-                master["active_tasks"] = data.get("active_tasks", 0)
-                master["total_requests"] = data.get("total_requests", 0)
+                with master_state_lock:
+                    master["alive"] = True
+                    master["active_tasks"] = data.get("active_tasks", 0)
+                    master["total_requests"] = data.get("total_requests", 0)
                 alive_masters.append(master)
             else:
-                master["alive"] = False
+                with master_state_lock:
+                    master["alive"] = False
 
         except requests.exceptions.RequestException:
-            master["alive"] = False
+            with master_state_lock:
+                master["alive"] = False
 
     return alive_masters
+
+
+def effective_connections(master):
+    return master["active_tasks"] + master["in_flight"]
+
+
+def load_score(master):
+    request_history = max(master["total_requests"], master["assigned_requests"])
+    return effective_connections(master) + (request_history * 0.01)
 
 
 def choose_master_round_robin(alive_masters):
@@ -74,13 +91,24 @@ def choose_master_round_robin(alive_masters):
 
 
 def choose_master_least_connections(alive_masters):
-    return min(alive_masters, key=lambda master: master["active_tasks"])
+    return min(
+        alive_masters,
+        key=lambda master: (
+            effective_connections(master),
+            master["assigned_requests"],
+            master["id"]
+        )
+    )
 
 
 def choose_master_load_aware(alive_masters):
     return min(
         alive_masters,
-        key=lambda master: master["active_tasks"] + (master["total_requests"] * 0.01)
+        key=lambda master: (
+            load_score(master),
+            master["total_requests"],
+            master["id"]
+        )
     )
 
 
@@ -90,20 +118,39 @@ def choose_master(excluded_master_ids=None):
     if not alive_masters:
         return None
 
-    if LOAD_BALANCING_STRATEGY == "round_robin":
-        return choose_master_round_robin(alive_masters)
+    with master_state_lock:
+        alive_masters = [
+            master
+            for master in masters
+            if master["alive"] and master["id"] not in (excluded_master_ids or set())
+        ]
 
-    if LOAD_BALANCING_STRATEGY == "least_connections":
-        return choose_master_least_connections(alive_masters)
+        if not alive_masters:
+            return None
 
-    if LOAD_BALANCING_STRATEGY == "load_aware":
-        return choose_master_load_aware(alive_masters)
+        if LOAD_BALANCING_STRATEGY == "round_robin":
+            selected_master = choose_master_round_robin(alive_masters)
+        elif LOAD_BALANCING_STRATEGY == "least_connections":
+            selected_master = choose_master_least_connections(alive_masters)
+        elif LOAD_BALANCING_STRATEGY == "load_aware":
+            selected_master = choose_master_load_aware(alive_masters)
+        else:
+            selected_master = choose_master_round_robin(alive_masters)
 
-    return choose_master_round_robin(alive_masters)
+        selected_master["in_flight"] += 1
+        selected_master["assigned_requests"] += 1
+
+        return selected_master
+
+
+def release_master(master):
+    with master_state_lock:
+        master["in_flight"] = max(0, master["in_flight"] - 1)
 
 
 def mark_master_failed(master):
-    master["alive"] = False
+    with master_state_lock:
+        master["alive"] = False
 
 
 def should_retry_another_master(response_data):
@@ -171,14 +218,28 @@ def handle_query(request: RequestModel):
                 f"[Load Balancer] Master {master['id']} failed for request "
                 f"{request.id}. Retrying another master."
             )
+        finally:
+            release_master(master)
 
 
 @app.get("/health")
 def health_check():
+    update_master_health()
+
+    with master_state_lock:
+        master_metrics = []
+
+        for master in masters:
+            master_metrics.append({
+                **master,
+                "effective_connections": effective_connections(master),
+                "load_score": round(load_score(master), 3)
+            })
+
     return {
         "status": "load balancer alive",
         "strategy": LOAD_BALANCING_STRATEGY,
-        "masters": update_master_health()
+        "masters": master_metrics
     }
 
 

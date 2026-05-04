@@ -10,6 +10,7 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "300"))
 OLLAMA_NUM_PREDICT = int(os.getenv("OLLAMA_NUM_PREDICT", "300"))
 OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.2"))
+OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "5m")
 USE_OLLAMA = os.getenv("USE_OLLAMA", "true").lower() == "true"
 
 
@@ -24,6 +25,10 @@ def has_relevant_context(context: str) -> bool:
     return bool(stripped_context) and not stripped_context.startswith(no_context_prefixes)
 
 
+def retrieval_failed(context: str) -> bool:
+    return context.strip().startswith("RAG service unavailable")
+
+
 def extract_context_source(context: str) -> str:
     match = re.search(r"\[source=([^\]\s]+)", context)
 
@@ -36,6 +41,9 @@ def extract_context_source(context: str) -> str:
 def answer_prefix(context: str) -> str:
     if has_relevant_context(context):
         return f"I found relevant information in {extract_context_source(context)}: "
+
+    if retrieval_failed(context):
+        return "RAG retrieval failed, so I answered without document context: "
 
     return "I did not find relevant document context, but "
 
@@ -81,6 +89,7 @@ def run_llm(query: str, context: str, max_tokens: int | None = None) -> str:
         "model": OLLAMA_MODEL,
         "prompt": build_prompt(query, context),
         "stream": False,
+        "keep_alive": OLLAMA_KEEP_ALIVE,
         "options": {
             "num_predict": num_predict,
             "temperature": OLLAMA_TEMPERATURE

@@ -1,5 +1,7 @@
 import time
 import argparse
+import threading
+
 from fastapi import FastAPI
 import uvicorn
 
@@ -13,6 +15,22 @@ WORKER_ID = 0
 MASTER_ID = 0
 active_tasks = 0
 total_requests = 0
+failure_lock = threading.Lock()
+fail_next_request = False
+fail_next_delay = 0.0
+fail_next_reason = "Simulated worker failure"
+
+
+def consume_fail_next_request():
+    global fail_next_request
+
+    with failure_lock:
+        should_fail = fail_next_request
+        delay = fail_next_delay
+        reason = fail_next_reason
+        fail_next_request = False
+
+    return should_fail, delay, reason
 
 
 @app.post("/process")
@@ -26,20 +44,58 @@ def process_request(request: RequestModel):
 
     print(f"[Worker {WORKER_ID}] Processing request {request.id}")
 
-    context = retrieve_context(request.query)
-    result = run_llm(request.query, context, max_tokens=request.max_tokens)
+    try:
+        should_fail, delay, reason = consume_fail_next_request()
 
-    latency = time.time() - start_time
+        if should_fail:
+            if delay > 0:
+                time.sleep(delay)
 
-    active_tasks -= 1
+            raise RuntimeError(reason)
+
+        context = retrieve_context(request.query)
+        result = run_llm(request.query, context, max_tokens=request.max_tokens)
+
+        latency = time.time() - start_time
+
+        return {
+            "id": request.id,
+            "result": result,
+            "worker_id": WORKER_ID,
+            "master_id": MASTER_ID,
+            "latency": latency,
+            "success": True
+        }
+    except Exception as error:
+        latency = time.time() - start_time
+
+        return {
+            "id": request.id,
+            "result": f"Worker {WORKER_ID} failed during processing: {error}",
+            "worker_id": WORKER_ID,
+            "master_id": MASTER_ID,
+            "latency": latency,
+            "success": False
+        }
+    finally:
+        active_tasks -= 1
+
+
+@app.post("/simulate/fail-next")
+def simulate_fail_next(delay: float = 1.0, reason: str = "Simulated worker failure"):
+    global fail_next_request, fail_next_delay, fail_next_reason
+
+    with failure_lock:
+        fail_next_request = True
+        fail_next_delay = delay
+        fail_next_reason = reason
 
     return {
-        "id": request.id,
-        "result": result,
+        "success": True,
         "worker_id": WORKER_ID,
-        "master_id": MASTER_ID,
-        "latency": latency,
-        "success": True
+        "message": "Next request will fail during processing",
+        "delay": fail_next_delay,
+        "reason": fail_next_reason
     }
 
 

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib.sh"
+
+"$SCRIPT_DIR/stop_system.sh"
+
+start_service rag env QDRANT_PATH="$QDRANT_PATH" "$PYTHON" -m rag.api --port 7000
+wait_for_http "$RAG_URL/health" "RAG service"
+
+start_service worker0 env USE_OLLAMA=false RAG_URL="$RAG_URL" "$PYTHON" -m workers.gpu_worker --id 0 --master-id 0 --port 9001
+start_service worker1 env USE_OLLAMA=false RAG_URL="$RAG_URL" "$PYTHON" -m workers.gpu_worker --id 1 --master-id 0 --port 9002
+wait_for_http "http://127.0.0.1:9001/health" "Worker 0"
+wait_for_http "http://127.0.0.1:9002/health" "Worker 1"
+
+start_service master0 env WORKER_REQUEST_TIMEOUT=60 "$PYTHON" -m master.scheduler --master-id 0 --port 8001 --workers 0:9001 1:9002
+wait_for_http "http://127.0.0.1:8001/health" "Master 0"
+
+echo "Forcing Worker 0 to fail during its next request..."
+curl -fsS -X POST "http://127.0.0.1:9001/simulate/fail-next?delay=1&reason=simulated%20worker%20failure"
+echo
+
+echo "Sending request directly to Master 0. Expected final worker_id: 1"
+curl -fsS -X POST "http://127.0.0.1:8001/schedule" \
+  -H "Content-Type: application/json" \
+  -d '{"id":999,"query":"Explain fault tolerance in distributed systems.","max_tokens":300}'
+echo
+show_logs_hint

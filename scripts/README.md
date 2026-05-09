@@ -44,18 +44,18 @@ Inference test output includes latency, throughput, simulated GPU utilization, m
 
 For two-MacBook mode, run `start_adam_distributed.sh` on `Adams-MacBook-Pro.local` first, then run `start_karim_distributed.sh` on `karims-macbook-pro.local`. The distributed setup uses `llama3.2:1b` on Karim and `phi:2.7b` on Adam by default.
 
-If Adam cannot use RAG port `7000`, start Adam with:
+RAG defaults to port `7100` because macOS often uses `7000` for system services. Start Adam normally with:
 
 ```bash
-RAG_URL=http://127.0.0.1:7100 ./scripts/start_adam_distributed.sh
-RAG_URL=http://127.0.0.1:7100 ./scripts/inject_pdf.sh "/Users/adamheshmatmakram/Downloads/3-Processes.pdf"
+./scripts/start_adam_distributed.sh
+./scripts/inject_pdf.sh "/Users/adamheshmatmakram/Downloads/3-Processes.pdf"
 ```
 
-From Karim, pass Adam's RAG URL to distributed RAG checks:
+From Karim, distributed RAG checks use port `7100` by default:
 
 ```bash
-ADAM_RAG_URL=http://Adams-MacBook-Pro.local:7100 ./scripts/check_distributed_network.sh
-ADAM_RAG_URL=http://Adams-MacBook-Pro.local:7100 ./scripts/test_distributed_rag_retrieval.sh "what is process context?"
+./scripts/check_distributed_network.sh
+./scripts/test_distributed_rag_retrieval.sh "what is process context?"
 ```
 
 ## Fault Tolerance

@@ -32,5 +32,6 @@ wait_for_http "http://127.0.0.1:8002/health" "Adam Master 1"
 echo "Adam distributed node is running."
 echo "Hostname: Adams-MacBook-Pro.local"
 echo "Model: $ADAM_MODEL"
+echo "RAG: $RAG_URL"
 echo "Master 1: http://Adams-MacBook-Pro.local:8002"
 show_logs_hint

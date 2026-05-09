@@ -6,8 +6,8 @@ source "$SCRIPT_DIR/lib.sh"
 
 KARIM_HOST="${KARIM_HOST:-karims-macbook-pro.local}"
 ADAM_HOST="${ADAM_HOST:-Adams-MacBook-Pro.local}"
-KARIM_RAG_URL="${KARIM_RAG_URL:-http://$KARIM_HOST:7000}"
-ADAM_RAG_URL="${ADAM_RAG_URL:-http://$ADAM_HOST:7000}"
+KARIM_RAG_URL="${KARIM_RAG_URL:-http://$KARIM_HOST:7100}"
+ADAM_RAG_URL="${ADAM_RAG_URL:-http://$ADAM_HOST:7100}"
 
 check_url() {
   local name="$1"

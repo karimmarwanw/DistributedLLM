@@ -25,7 +25,7 @@ url_port() {
 PYTHON="${PYTHON:-$ROOT_DIR/.venv/bin/python}"
 LOG_DIR="$ROOT_DIR/logs"
 PID_DIR="$ROOT_DIR/.pids"
-RAG_URL="${RAG_URL:-http://127.0.0.1:7000}"
+RAG_URL="${RAG_URL:-http://127.0.0.1:7100}"
 RAG_PORT="${RAG_PORT:-$(url_port "$RAG_URL")}"
 LB_URL="${LB_URL:-http://127.0.0.1:8000}"
 QDRANT_PATH="${QDRANT_PATH:-$ROOT_DIR/qdrant_data}"
@@ -156,10 +156,6 @@ stop_matching_processes() {
 }
 
 stop_stale_project_services() {
-  for port in 8000 8001 8002 9001 9002 9003 9004 7000 7100 "$RAG_PORT"; do
-    stop_port_listener "$port"
-  done
-
   stop_matching_processes "stale load balancer" "[Pp]ython.*-m lb\\.load_balancer"
   stop_matching_processes "stale master service" "[Pp]ython.*-m master\\.scheduler"
   stop_matching_processes "stale worker service" "[Pp]ython.*-m workers\\.gpu_worker"

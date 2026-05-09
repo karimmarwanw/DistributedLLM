@@ -32,6 +32,7 @@ echo "Karim distributed coordinator is running."
 echo "Karim hostname: $KARIM_HOST"
 echo "Adam hostname: $ADAM_HOST"
 echo "Karim model: $KARIM_MODEL"
+echo "RAG: $RAG_URL"
 echo "Master URLs: $DISTRIBUTED_MASTER_URLS"
 echo "Load balancer: http://$KARIM_HOST:8000"
 show_logs_hint

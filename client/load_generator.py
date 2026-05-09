@@ -2,7 +2,7 @@ import time
 import threading
 import argparse
 import os
-from collections import Counter
+from collections import Counter, defaultdict
 import requests
 
 LB_URL = os.getenv("LB_QUERY_URL", "http://127.0.0.1:8000/query")
@@ -14,6 +14,13 @@ def format_gpu_utilization(value):
         return "N/A"
 
     return f"{float(value):.1f}%"
+
+
+def format_gpu_source(source):
+    if not source:
+        return "unknown"
+
+    return source
 
 
 def format_result_preview(result, max_length):
@@ -53,6 +60,7 @@ def send_request(
 
         if data.get("success"):
             gpu_utilization = data.get("gpu_utilization_percent")
+            gpu_source = data.get("gpu_utilization_source", "unknown")
             llm_model = data.get("llm_model", "unknown")
             print(
                 f"[Client] Request {request_id} | "
@@ -60,6 +68,7 @@ def send_request(
                 f"Worker {data['worker_id']} | "
                 f"Total Latency: {total_latency:.3f}s | "
                 f"GPU Utilization: {format_gpu_utilization(gpu_utilization)} | "
+                f"GPU Source: {format_gpu_source(gpu_source)} | "
                 f"Model: {llm_model}"
             )
             if show_results:
@@ -73,8 +82,12 @@ def send_request(
                 results["masters"].append(data["master_id"])
                 results["workers"].append(data["worker_id"])
                 results["models"].append(llm_model)
+                results["gpu_sources"].append(gpu_source)
                 if gpu_utilization is not None:
                     results["gpu_utilizations"].append(float(gpu_utilization))
+                    results["gpu_utilizations_by_master"][
+                        data["master_id"]
+                    ].append(float(gpu_utilization))
         else:
             print(f"[Client] Request {request_id} failed: {data.get('result')}")
             with lock:
@@ -105,6 +118,8 @@ def run_load_test(
         "workers": [],
         "models": [],
         "gpu_utilizations": [],
+        "gpu_utilizations_by_master": defaultdict(list),
+        "gpu_sources": [],
         "failures": 0
     }
 
@@ -165,10 +180,23 @@ def run_load_test(
         )
         print(f"Min GPU utilization: {min(gpu_utilizations):.1f}%")
         print(f"Max GPU utilization: {max(gpu_utilizations):.1f}%")
+        by_master = {}
+        for master_id, master_values in (
+            results["gpu_utilizations_by_master"].items()
+        ):
+            by_master[master_id] = {
+                "avg": round(sum(master_values) / len(master_values), 1),
+                "min": round(min(master_values), 1),
+                "max": round(max(master_values), 1)
+            }
+        print(f"GPU utilization by master: {by_master}")
+        print(f"GPU metric sources: {dict(Counter(results['gpu_sources']))}")
     else:
         print("Average GPU utilization: N/A")
         print("Min GPU utilization: N/A")
         print("Max GPU utilization: N/A")
+        print("GPU utilization by master: {}")
+        print("GPU metric sources: {}")
 
     print("==================================")
 

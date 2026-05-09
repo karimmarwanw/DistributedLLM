@@ -21,7 +21,11 @@ def make_master(master_id, url):
         "active_tasks": 0,
         "total_requests": 0,
         "in_flight": 0,
-        "assigned_requests": 0
+        "assigned_requests": 0,
+        "gpu_utilization_percent": None,
+        "gpu_utilization_source": "unavailable",
+        "gpu_model": None,
+        "gpu_core_count": None
     }
 
 
@@ -51,6 +55,7 @@ master_state_lock = threading.Lock()
 
 LOAD_BALANCING_STRATEGY = "round_robin"
 MASTER_REQUEST_TIMEOUT = float(os.getenv("LB_MASTER_TIMEOUT", "300"))
+GPU_LOAD_WEIGHT = float(os.getenv("LB_GPU_LOAD_WEIGHT", "1.0"))
 # Options:
 # "round_robin"
 # "least_connections"
@@ -74,6 +79,16 @@ def update_master_health(excluded_master_ids=None):
                     master["alive"] = True
                     master["active_tasks"] = data.get("active_tasks", 0)
                     master["total_requests"] = data.get("total_requests", 0)
+                    master["gpu_utilization_percent"] = data.get(
+                        "master_gpu_utilization_percent",
+                        data.get("gpu_utilization_percent")
+                    )
+                    master["gpu_utilization_source"] = data.get(
+                        "gpu_utilization_source",
+                        "unavailable"
+                    )
+                    master["gpu_model"] = data.get("gpu_model")
+                    master["gpu_core_count"] = data.get("gpu_core_count")
                 alive_masters.append(master)
             else:
                 with master_state_lock:
@@ -90,9 +105,26 @@ def effective_connections(master):
     return master["active_tasks"] + master["in_flight"]
 
 
+def gpu_load_component(master):
+    gpu_utilization = master.get("gpu_utilization_percent")
+
+    if gpu_utilization is None:
+        return 0.0
+
+    try:
+        bounded_utilization = max(0.0, min(100.0, float(gpu_utilization)))
+        return (bounded_utilization / 100.0) * GPU_LOAD_WEIGHT
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def load_score(master):
     request_history = max(master["total_requests"], master["assigned_requests"])
-    return effective_connections(master) + (request_history * 0.01)
+    return (
+        effective_connections(master)
+        + gpu_load_component(master)
+        + (request_history * 0.01)
+    )
 
 
 def choose_master_round_robin(alive_masters):
@@ -121,6 +153,7 @@ def choose_master_load_aware(alive_masters):
         alive_masters,
         key=lambda master: (
             load_score(master),
+            gpu_load_component(master),
             master["total_requests"],
             master["id"]
         )
@@ -248,12 +281,14 @@ def health_check():
             master_metrics.append({
                 **master,
                 "effective_connections": effective_connections(master),
+                "gpu_load_component": round(gpu_load_component(master), 3),
                 "load_score": round(load_score(master), 3)
             })
 
     return {
         "status": "load balancer alive",
         "strategy": LOAD_BALANCING_STRATEGY,
+        "gpu_load_weight": GPU_LOAD_WEIGHT,
         "masters": master_metrics
     }
 

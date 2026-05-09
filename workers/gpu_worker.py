@@ -96,6 +96,7 @@ def process_request(request: RequestModel):
             "master_id": MASTER_ID,
             "latency": latency,
             "gpu_utilization_percent": request_gpu_utilization,
+            "gpu_utilization_source": "simulated_worker_active_tasks",
             "gpu_capacity": GPU_CAPACITY,
             "llm_model": OLLAMA_MODEL,
             "success": True
@@ -110,6 +111,7 @@ def process_request(request: RequestModel):
             "master_id": MASTER_ID,
             "latency": latency,
             "gpu_utilization_percent": request_gpu_utilization,
+            "gpu_utilization_source": "simulated_worker_active_tasks",
             "gpu_capacity": GPU_CAPACITY,
             "llm_model": OLLAMA_MODEL,
             "success": False
@@ -145,6 +147,7 @@ def health_check():
         "worker_id": WORKER_ID,
         "master_id": MASTER_ID,
         "llm_model": OLLAMA_MODEL,
+        "gpu_utilization_source": "simulated_worker_active_tasks",
         **metrics
     }
 

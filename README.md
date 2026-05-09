@@ -24,7 +24,7 @@ The system is built with Python, FastAPI, asynchronous HTTP-style service commun
   - success/failure count
   - latency
   - throughput
-  - simulated GPU utilization
+  - master-node GPU utilization
   - master distribution
   - worker distribution
 
@@ -354,6 +354,10 @@ QDRANT_PATH=./qdrant_data
 LB_MASTER_TIMEOUT=300
 WORKER_REQUEST_TIMEOUT=300
 WORKER_GPU_CAPACITY=2
+GPU_METRICS_MODE=auto
+GPU_METRICS_CACHE_SECONDS=1.0
+GPU_METRICS_COMMAND_TIMEOUT=0.75
+LB_GPU_LOAD_WEIGHT=1.0
 SERVICE_HOST=127.0.0.1
 MASTER_URLS=0:http://127.0.0.1:8001,1:http://127.0.0.1:8002
 WORKER_HOST=127.0.0.1
@@ -387,13 +391,15 @@ The worker services are named GPU workers because they represent GPU inference n
 
 When Ollama mode is enabled, model execution is handled by Ollama locally. On supported MacBooks, Ollama may use Apple acceleration internally, but the project itself treats workers as distributed inference services rather than directly controlling GPU kernels.
 
-The `GPU utilization` value printed by the client is a simulated worker utilization metric based on each worker's active tasks and configured `WORKER_GPU_CAPACITY`. It is included so every inference test reports the required performance metrics: latency, throughput, and GPU utilization.
+On macOS, each master samples real device-level Apple GPU utilization from `IOAccelerator` through `ioreg`. This reports the physical MacBook GPU usage for that master node. In two-MacBook mode, Master 0 reports Karim's MacBook GPU and Master 1 reports Adam's MacBook GPU. If real metrics are unavailable, the system falls back to a simulated master utilization based on active tasks.
+
+The `load_aware` strategy uses active connections, real/simulated master GPU utilization, and request history. `LB_GPU_LOAD_WEIGHT` controls how much the GPU percentage affects the load-aware score.
 
 ## Current Limitations
 
-- Distributed execution is simulated on one machine using multiple local FastAPI services.
+- Single-Mac mode simulates distributed execution with multiple local FastAPI services; two-MacBook mode runs masters/workers across two physical machines.
 - Worker nodes represent GPU workers, but no direct CUDA/NVIDIA/Metal programming is implemented.
-- GPU utilization is simulated from worker load rather than read from real GPU hardware counters.
+- GPU utilization is read from macOS GPU telemetry on MacBooks; on unsupported systems it falls back to simulated master load.
 - Local Ollama inference is much slower than simulation mode for large load tests.
 - Local Qdrant storage is suitable for this project demo; a production system would normally use a standalone Qdrant server.
 - Fault tolerance retries requests, but it does not implement persistent queues or exactly-once execution.
@@ -408,12 +414,13 @@ Implemented:
 - Local Ollama inference
 - RAG with document ingestion and persistent Qdrant storage
 - Client-side load testing and metrics
+- Real macOS master-node GPU utilization for load-aware routing
 - Worker and master failover scenarios
 
 Possible future work:
 
-- Real multi-machine deployment
-- Hardware-level GPU metrics
+- Production multi-machine deployment hardening
+- More precise per-process GPU attribution
 - Standalone Qdrant server deployment
 - Request queueing and durable retries
 - More advanced scheduler policies

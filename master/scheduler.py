@@ -6,6 +6,7 @@ import requests
 from fastapi import FastAPI
 import uvicorn
 
+from common.gpu_metrics import get_gpu_metrics
 from common.models import RequestModel
 
 app = FastAPI()
@@ -24,6 +25,10 @@ failure_lock = threading.Lock()
 fail_during_next_schedule = False
 fail_during_next_schedule_delay = 2.0
 fail_during_next_schedule_reason = "Simulated master failure during scheduling"
+
+
+def simulated_master_gpu_utilization(task_count):
+    return round(min(100.0, (task_count / max(1, len(workers))) * 100.0), 2)
 
 
 def consume_fail_during_next_schedule():
@@ -65,10 +70,80 @@ def end_task():
 
 def current_metrics():
     with metrics_lock:
-        return {
-            "active_tasks": active_tasks,
-            "total_requests": total_requests
-        }
+        current_active_tasks = active_tasks
+        current_total_requests = total_requests
+
+    gpu_metrics = get_gpu_metrics(
+        fallback_percent=simulated_master_gpu_utilization(current_active_tasks),
+        fallback_source="simulated_master_active_tasks"
+    )
+
+    return {
+        "active_tasks": current_active_tasks,
+        "total_requests": current_total_requests,
+        "master_gpu_utilization_percent": gpu_metrics["gpu_utilization_percent"],
+        "gpu_utilization_percent": gpu_metrics["gpu_utilization_percent"],
+        "gpu_utilization_source": gpu_metrics["gpu_utilization_source"],
+        "gpu_model": gpu_metrics["gpu_model"],
+        "gpu_core_count": gpu_metrics["gpu_core_count"]
+    }
+
+
+def attach_master_gpu_metrics(response_data):
+    metrics = current_metrics()
+    worker_gpu_utilization = response_data.get("gpu_utilization_percent")
+
+    response_data["worker_gpu_utilization_percent"] = worker_gpu_utilization
+    response_data["master_gpu_utilization_percent"] = metrics[
+        "master_gpu_utilization_percent"
+    ]
+    response_data["gpu_utilization_percent"] = metrics["gpu_utilization_percent"]
+    response_data["gpu_utilization_source"] = metrics["gpu_utilization_source"]
+    response_data["gpu_model"] = metrics["gpu_model"]
+    response_data["gpu_core_count"] = metrics["gpu_core_count"]
+
+    return response_data
+
+
+def failed_schedule_response(request, result, attempted_workers):
+    metrics = current_metrics()
+
+    return {
+        "id": request.id,
+        "success": False,
+        "result": result,
+        "master_id": MASTER_ID,
+        "attempted_workers": attempted_workers,
+        "master_gpu_utilization_percent": metrics["master_gpu_utilization_percent"],
+        "gpu_utilization_percent": metrics["gpu_utilization_percent"],
+        "gpu_utilization_source": metrics["gpu_utilization_source"],
+        "gpu_model": metrics["gpu_model"],
+        "gpu_core_count": metrics["gpu_core_count"]
+    }
+
+
+def current_worker_summary():
+    alive_workers = get_alive_workers()
+
+    return {
+        "workers": alive_workers,
+        "worker_gpu_utilizations_percent": [
+            worker.get("gpu_utilization_percent")
+            for worker in alive_workers
+        ]
+    }
+
+
+def master_health_payload():
+    metrics = current_metrics()
+    worker_summary = current_worker_summary()
+
+    return {
+        "status": "alive",
+        "master_id": MASTER_ID,
+        **metrics,
+        **worker_summary
+    }
 
 
 def get_alive_workers(excluded_worker_ids=None):
@@ -153,13 +228,11 @@ def schedule_request(request: RequestModel):
             worker = choose_worker_round_robin(set(attempted_workers))
 
             if worker is None:
-                return {
-                    "id": request.id,
-                    "success": False,
-                    "result": last_error,
-                    "master_id": MASTER_ID,
-                    "attempted_workers": attempted_workers
-                }
+                return failed_schedule_response(
+                    request,
+                    last_error,
+                    attempted_workers
+                )
 
             attempted_workers.append(worker["id"])
 
@@ -184,7 +257,7 @@ def schedule_request(request: RequestModel):
                 data = response.json()
 
                 if data.get("success", False):
-                    return data
+                    return attach_master_gpu_metrics(data)
 
                 last_error = data.get("result", f"Worker {worker['id']} failed")
                 mark_worker_failed(worker)
@@ -243,14 +316,7 @@ def reset_worker_round_robin(index: int = 0):
 
 @app.get("/health")
 def health_check():
-    metrics = current_metrics()
-
-    return {
-        "status": "alive",
-        "master_id": MASTER_ID,
-        **metrics,
-        "workers": get_alive_workers()
-    }
+    return master_health_payload()
 
 
 if __name__ == "__main__":

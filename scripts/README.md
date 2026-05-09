@@ -40,7 +40,7 @@ Run all scripts from the project root or directly by path.
 ./scripts/test_strategies.sh 100
 ```
 
-Inference test output includes latency, throughput, simulated GPU utilization, master distribution, and worker distribution.
+Inference test output includes latency, throughput, master-node GPU utilization, master distribution, and worker distribution.
 
 For two-MacBook mode, run `start_adam_distributed.sh` on `Adams-MacBook-Pro.local` first, then run `start_karim_distributed.sh` on `karims-macbook-pro.local`. The distributed setup uses `llama3.2:1b` on Karim and `phi:2.7b` on Adam by default.
 

@@ -8,7 +8,7 @@ ADAM_MODEL="${ADAM_MODEL:-phi:2.7b}"
 
 start_ollama_service
 
-start_service rag env SERVICE_HOST=0.0.0.0 QDRANT_PATH="$QDRANT_PATH" "$PYTHON" -m rag.api --port 7000
+start_service rag env SERVICE_HOST=0.0.0.0 QDRANT_PATH="$QDRANT_PATH" "$PYTHON" -m rag.api --port "$RAG_PORT"
 wait_for_http "$RAG_URL/health" "Adam RAG service"
 
 start_service worker2 env SERVICE_HOST=0.0.0.0 USE_OLLAMA=true RAG_URL="$RAG_URL" OLLAMA_MODEL="$ADAM_MODEL" OLLAMA_TIMEOUT=300 OLLAMA_KEEP_ALIVE="$OLLAMA_KEEP_ALIVE" "$PYTHON" -m workers.gpu_worker --id 2 --master-id 1 --port 9003

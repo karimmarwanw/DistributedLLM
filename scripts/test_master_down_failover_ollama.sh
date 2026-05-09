@@ -8,7 +8,7 @@ source "$SCRIPT_DIR/lib.sh"
 
 start_ollama_service
 
-start_service rag env QDRANT_PATH="$QDRANT_PATH" "$PYTHON" -m rag.api --port 7000
+start_service rag env QDRANT_PATH="$QDRANT_PATH" "$PYTHON" -m rag.api --port "$RAG_PORT"
 wait_for_http "$RAG_URL/health" "RAG service"
 
 start_service worker0 env USE_OLLAMA=true RAG_URL="$RAG_URL" OLLAMA_MODEL="$OLLAMA_MODEL" OLLAMA_TIMEOUT=300 OLLAMA_KEEP_ALIVE="$OLLAMA_KEEP_ALIVE" "$PYTHON" -m workers.gpu_worker --id 0 --master-id 0 --port 9001

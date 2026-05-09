@@ -188,6 +188,12 @@ Start Adam's node first on Adam's MacBook:
 ./scripts/start_adam_distributed.sh
 ```
 
+If Adam's MacBook cannot use port `7000`, run Adam's RAG on `7100`:
+
+```bash
+RAG_URL=http://127.0.0.1:7100 ./scripts/start_adam_distributed.sh
+```
+
 Then start Karim's coordinator on Karim's MacBook:
 
 ```bash
@@ -198,6 +204,12 @@ Check that both machines can reach each other:
 
 ```bash
 ./scripts/check_distributed_network.sh
+```
+
+If Adam is using RAG port `7100`, check with:
+
+```bash
+ADAM_RAG_URL=http://Adams-MacBook-Pro.local:7100 ./scripts/check_distributed_network.sh
 ```
 
 Run a distributed 10-request test from Karim's MacBook:
@@ -259,6 +271,12 @@ Test retrieval directly:
 Documents are persisted in `qdrant_data/`, so they remain available after restarting the services.
 
 In two-MacBook mode, each MacBook has its own RAG service and its own `qdrant_data/` folder. If you want both masters to answer from the same PDF, inject the PDF on both MacBooks.
+
+If Adam's RAG is running on `7100`, inject on Adam with:
+
+```bash
+RAG_URL=http://127.0.0.1:7100 ./scripts/inject_pdf.sh "/Users/adamheshmatmakram/Downloads/3-Processes.pdf"
+```
 
 ## Load Balancing Strategies
 
@@ -349,6 +367,7 @@ OLLAMA_TIMEOUT=300
 OLLAMA_NUM_PREDICT=300
 OLLAMA_KEEP_ALIVE=5m
 RAG_URL=http://127.0.0.1:7000
+RAG_PORT=7000
 QDRANT_PATH=./qdrant_data
 LB_MASTER_TIMEOUT=300
 WORKER_REQUEST_TIMEOUT=300
@@ -359,6 +378,8 @@ WORKER_HOST=127.0.0.1
 LB_QUERY_URL=http://127.0.0.1:8000/query
 KARIM_HOST=karims-macbook-pro.local
 ADAM_HOST=Adams-MacBook-Pro.local
+KARIM_RAG_URL=http://karims-macbook-pro.local:7000
+ADAM_RAG_URL=http://Adams-MacBook-Pro.local:7000
 KARIM_MODEL=llama3.2:1b
 ADAM_MODEL=phi:2.7b
 ```

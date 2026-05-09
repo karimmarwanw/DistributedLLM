@@ -3,10 +3,30 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+url_port() {
+  local url="$1"
+  local after_scheme="${url#*://}"
+  local host_port="${after_scheme%%/*}"
+  local port="${host_port##*:}"
+
+  if [[ "$port" == "$host_port" ]]; then
+    if [[ "$url" == https://* ]]; then
+      echo 443
+    else
+      echo 80
+    fi
+    return
+  fi
+
+  echo "$port"
+}
+
 PYTHON="${PYTHON:-$ROOT_DIR/.venv/bin/python}"
 LOG_DIR="$ROOT_DIR/logs"
 PID_DIR="$ROOT_DIR/.pids"
 RAG_URL="${RAG_URL:-http://127.0.0.1:7000}"
+RAG_PORT="${RAG_PORT:-$(url_port "$RAG_URL")}"
 LB_URL="${LB_URL:-http://127.0.0.1:8000}"
 QDRANT_PATH="${QDRANT_PATH:-$ROOT_DIR/qdrant_data}"
 OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.2:1b}"
@@ -126,7 +146,7 @@ stop_matching_processes() {
 }
 
 stop_stale_project_services() {
-  for port in 8000 8001 8002 9001 9002 9003 9004 7000; do
+  for port in 8000 8001 8002 9001 9002 9003 9004 7000 7100 "$RAG_PORT"; do
     stop_port_listener "$port"
   done
 

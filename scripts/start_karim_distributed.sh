@@ -11,7 +11,7 @@ DISTRIBUTED_MASTER_URLS="${MASTER_URLS:-0:http://$KARIM_HOST:8001,1:http://$ADAM
 
 start_ollama_service
 
-start_service rag env SERVICE_HOST=0.0.0.0 QDRANT_PATH="$QDRANT_PATH" "$PYTHON" -m rag.api --port 7000
+start_service rag env SERVICE_HOST=0.0.0.0 QDRANT_PATH="$QDRANT_PATH" "$PYTHON" -m rag.api --port "$RAG_PORT"
 wait_for_http "$RAG_URL/health" "Karim RAG service"
 
 start_service worker0 env SERVICE_HOST=0.0.0.0 USE_OLLAMA=true RAG_URL="$RAG_URL" OLLAMA_MODEL="$KARIM_MODEL" OLLAMA_TIMEOUT=300 OLLAMA_KEEP_ALIVE="$OLLAMA_KEEP_ALIVE" "$PYTHON" -m workers.gpu_worker --id 0 --master-id 0 --port 9001

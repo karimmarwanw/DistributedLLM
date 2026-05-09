@@ -6,7 +6,7 @@ source "$SCRIPT_DIR/lib.sh"
 
 "$SCRIPT_DIR/stop_system.sh"
 
-start_service rag env QDRANT_PATH="$QDRANT_PATH" "$PYTHON" -m rag.api --port 7000
+start_service rag env QDRANT_PATH="$QDRANT_PATH" "$PYTHON" -m rag.api --port "$RAG_PORT"
 wait_for_http "$RAG_URL/health" "RAG service"
 
 start_service worker0 env USE_OLLAMA=false RAG_URL="$RAG_URL" "$PYTHON" -m workers.gpu_worker --id 0 --master-id 0 --port 9001

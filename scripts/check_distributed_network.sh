@@ -6,6 +6,8 @@ source "$SCRIPT_DIR/lib.sh"
 
 KARIM_HOST="${KARIM_HOST:-karims-macbook-pro.local}"
 ADAM_HOST="${ADAM_HOST:-Adams-MacBook-Pro.local}"
+KARIM_RAG_URL="${KARIM_RAG_URL:-http://$KARIM_HOST:7000}"
+ADAM_RAG_URL="${ADAM_RAG_URL:-http://$ADAM_HOST:7000}"
 
 check_url() {
   local name="$1"
@@ -22,6 +24,6 @@ check_url() {
 
 check_url "Karim load balancer" "http://$KARIM_HOST:8000/health"
 check_url "Karim master 0" "http://$KARIM_HOST:8001/health"
-check_url "Karim RAG" "http://$KARIM_HOST:7000/health"
+check_url "Karim RAG" "$KARIM_RAG_URL/health"
 check_url "Adam master 1" "http://$ADAM_HOST:8002/health"
-check_url "Adam RAG" "http://$ADAM_HOST:7000/health"
+check_url "Adam RAG" "$ADAM_RAG_URL/health"

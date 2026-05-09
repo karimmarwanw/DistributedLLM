@@ -59,7 +59,7 @@ start_service() {
   echo "Starting $name -> $log_file"
   (
     cd "$ROOT_DIR"
-    exec "$@"
+    exec nohup "$@"
   ) >"$log_file" 2>&1 &
 
   echo "$!" > "$pid_file"
@@ -122,7 +122,17 @@ stop_port_listener() {
   pids="$(lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
 
   for pid in $pids; do
-    terminate_pid "$pid" "stale project service on port $port"
+    local command
+    command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+
+    case "$command" in
+      *"-m lb.load_balancer"*|*"-m master.scheduler"*|*"-m workers.gpu_worker"*|*"-m rag.api"*)
+        terminate_pid "$pid" "stale project service on port $port"
+        ;;
+      *)
+        echo "Leaving non-project listener on port $port alone (PID $pid: ${command:-unknown})"
+        ;;
+    esac
   done
 }
 

@@ -2,9 +2,18 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ADAM_RAG_URL_WAS_SET="${RAG_URL+x}"
 source "$SCRIPT_DIR/lib.sh"
 
 ADAM_MODEL="${ADAM_MODEL:-phi:2.7b}"
+
+if [[ -z "$ADAM_RAG_URL_WAS_SET" && "$RAG_PORT" == "7000" ]]; then
+  if command -v lsof >/dev/null 2>&1 && lsof -nP -tiTCP:7000 -sTCP:LISTEN >/dev/null 2>&1; then
+    RAG_URL="http://127.0.0.1:7100"
+    RAG_PORT=7100
+    echo "Port 7000 is already in use; using Adam RAG fallback at $RAG_URL"
+  fi
+fi
 
 start_ollama_service
 

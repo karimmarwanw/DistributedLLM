@@ -1,4 +1,5 @@
 import argparse
+import os
 
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -15,6 +16,7 @@ from rag.vector_store import (
 
 
 app = FastAPI()
+SERVICE_HOST = os.getenv("SERVICE_HOST", "127.0.0.1")
 
 
 class DocumentIngestRequest(BaseModel):
@@ -89,4 +91,4 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=7000)
     args = parser.parse_args()
 
-    uvicorn.run(app, host="127.0.0.1", port=args.port)
+    uvicorn.run(app, host=SERVICE_HOST, port=args.port)

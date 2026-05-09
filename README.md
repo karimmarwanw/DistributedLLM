@@ -19,6 +19,7 @@ The system is built with Python, FastAPI, asynchronous HTTP-style service commun
 - PDF/text document ingestion into the vector database
 - Fault tolerance for worker failure and master failure scenarios
 - Scripts for normal demos, load tests, RAG tests, and failover tests
+- Single-Mac mode and two-MacBook distributed mode
 - Metrics printed by the client:
   - success/failure count
   - latency
@@ -151,6 +152,88 @@ Stop the project services and the Ollama background daemon:
 ./scripts/stop_system.sh --stop-ollama-service
 ```
 
+### Option 3: Two-MacBook Distributed Mode
+
+This mode runs the load balancer on Karim's MacBook and one master node on each MacBook.
+
+```text
+Karim MacBook: karims-macbook-pro.local
+- Load balancer
+- Master 0
+- Worker 0
+- Worker 1
+- Local RAG service
+- Local Ollama model: llama3.2:1b
+
+Adam MacBook: Adams-MacBook-Pro.local
+- Master 1
+- Worker 2
+- Worker 3
+- Local RAG service
+- Local Ollama model: phi:2.7b
+```
+
+Both MacBooks need this repository, the Python dependencies, Ollama, and the relevant model installed. They must be on the same network or hotspot. If macOS asks whether Python can accept incoming connections, allow it.
+
+You can quickly test hostname resolution with:
+
+```bash
+ping karims-macbook-pro.local
+ping Adams-MacBook-Pro.local
+```
+
+Start Adam's node first on Adam's MacBook:
+
+```bash
+./scripts/start_adam_distributed.sh
+```
+
+Then start Karim's coordinator on Karim's MacBook:
+
+```bash
+./scripts/start_karim_distributed.sh
+```
+
+Check that both machines can reach each other:
+
+```bash
+./scripts/check_distributed_network.sh
+```
+
+Run a distributed 10-request test from Karim's MacBook:
+
+```bash
+./scripts/test_distributed_10.sh "why are threads useful in distributed systems?"
+```
+
+Other distributed test scripts:
+
+```bash
+./scripts/test_distributed_single.sh "what is process context?"
+./scripts/test_distributed_distribution_10.sh
+./scripts/test_distributed_load.sh 10
+./scripts/test_distributed_strategies.sh 10
+./scripts/test_distributed_rag_retrieval.sh "what is process context?"
+./scripts/test_distributed_worker_failover_karim.sh
+./scripts/test_distributed_worker_failover_adam.sh
+./scripts/test_distributed_master_down_failover.sh
+./scripts/test_distributed_master_crash_during_processing.sh
+./scripts/test_distributed_single_worker_master_failover.sh
+```
+
+Stop services on each MacBook:
+
+```bash
+./scripts/stop_adam_distributed.sh
+./scripts/stop_karim_distributed.sh
+```
+
+If the `.local` hostnames are different on your network, override them:
+
+```bash
+KARIM_HOST=karims-macbook-pro.local ADAM_HOST=Adams-MacBook-Pro.local ./scripts/start_karim_distributed.sh
+```
+
 ## RAG Document Ingestion
 
 Start either the simulation system or Ollama system first, because the RAG service must be running.
@@ -175,6 +258,8 @@ Test retrieval directly:
 
 Documents are persisted in `qdrant_data/`, so they remain available after restarting the services.
 
+In two-MacBook mode, each MacBook has its own RAG service and its own `qdrant_data/` folder. If you want both masters to answer from the same PDF, inject the PDF on both MacBooks.
+
 ## Load Balancing Strategies
 
 The load balancer supports three strategies:
@@ -190,6 +275,18 @@ Round Robin rotates evenly between alive master nodes. Least Connections selects
 The load balancer also tracks requests that it has already assigned but that have not completed yet. This `in_flight` accounting is important during concurrent tests because health checks alone can be slightly stale. Least Connections uses `active_tasks + in_flight`; Load-Aware uses that same live load plus request history.
 
 ## Fault Tolerance Tests
+
+Distributed two-MacBook fault tests:
+
+```bash
+./scripts/test_distributed_worker_failover_karim.sh
+./scripts/test_distributed_worker_failover_adam.sh
+./scripts/test_distributed_master_down_failover.sh
+./scripts/test_distributed_single_worker_master_failover.sh
+./scripts/test_distributed_master_crash_during_processing.sh
+```
+
+Local single-Mac fault tests:
 
 Worker failure with retry to another worker:
 
@@ -256,6 +353,14 @@ QDRANT_PATH=./qdrant_data
 LB_MASTER_TIMEOUT=300
 WORKER_REQUEST_TIMEOUT=300
 WORKER_GPU_CAPACITY=2
+SERVICE_HOST=127.0.0.1
+MASTER_URLS=0:http://127.0.0.1:8001,1:http://127.0.0.1:8002
+WORKER_HOST=127.0.0.1
+LB_QUERY_URL=http://127.0.0.1:8000/query
+KARIM_HOST=karims-macbook-pro.local
+ADAM_HOST=Adams-MacBook-Pro.local
+KARIM_MODEL=llama3.2:1b
+ADAM_MODEL=phi:2.7b
 ```
 
 Example with a different Ollama model:
@@ -263,6 +368,15 @@ Example with a different Ollama model:
 ```bash
 OLLAMA_MODEL=qwen2.5:3b ./scripts/start_ollama_system.sh
 ```
+
+Two-MacBook mode intentionally uses different local models:
+
+```text
+Karim: llama3.2:1b
+Adam: phi:2.7b
+```
+
+The client output includes model distribution so you can see which model served each request.
 
 ## Notes on GPU Computing
 

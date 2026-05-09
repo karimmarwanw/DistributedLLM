@@ -1,10 +1,11 @@
 import time
 import threading
 import argparse
+import os
 from collections import Counter
 import requests
 
-LB_URL = "http://127.0.0.1:8000/query"
+LB_URL = os.getenv("LB_QUERY_URL", "http://127.0.0.1:8000/query")
 REQUEST_TIMEOUT = 120
 
 
@@ -52,12 +53,14 @@ def send_request(
 
         if data.get("success"):
             gpu_utilization = data.get("gpu_utilization_percent")
+            llm_model = data.get("llm_model", "unknown")
             print(
                 f"[Client] Request {request_id} | "
                 f"Master {data['master_id']} | "
                 f"Worker {data['worker_id']} | "
                 f"Total Latency: {total_latency:.3f}s | "
-                f"GPU Utilization: {format_gpu_utilization(gpu_utilization)}"
+                f"GPU Utilization: {format_gpu_utilization(gpu_utilization)} | "
+                f"Model: {llm_model}"
             )
             if show_results:
                 print(
@@ -69,6 +72,7 @@ def send_request(
                 results["latencies"].append(total_latency)
                 results["masters"].append(data["master_id"])
                 results["workers"].append(data["worker_id"])
+                results["models"].append(llm_model)
                 if gpu_utilization is not None:
                     results["gpu_utilizations"].append(float(gpu_utilization))
         else:
@@ -99,6 +103,7 @@ def run_load_test(
         "latencies": [],
         "masters": [],
         "workers": [],
+        "models": [],
         "gpu_utilizations": [],
         "failures": 0
     }
@@ -143,12 +148,14 @@ def run_load_test(
         print(f"Max latency: {max(latencies):.3f}s")
         print(f"Master distribution: {dict(Counter(results['masters']))}")
         print(f"Worker distribution: {dict(Counter(results['workers']))}")
+        print(f"Model distribution: {dict(Counter(results['models']))}")
     else:
         print("Average latency: N/A")
         print("Min latency: N/A")
         print("Max latency: N/A")
         print("Master distribution: {}")
         print("Worker distribution: {}")
+        print("Model distribution: {}")
 
     if results["gpu_utilizations"]:
         gpu_utilizations = results["gpu_utilizations"]

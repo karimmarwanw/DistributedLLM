@@ -8,10 +8,11 @@ import uvicorn
 
 from common.models import RequestModel
 from rag.retriever import retrieve_context
-from llm.inference import run_llm
+from llm.inference import OLLAMA_MODEL, run_llm
 
 app = FastAPI()
 
+SERVICE_HOST = os.getenv("SERVICE_HOST", "127.0.0.1")
 WORKER_ID = 0
 MASTER_ID = 0
 active_tasks = 0
@@ -96,6 +97,7 @@ def process_request(request: RequestModel):
             "latency": latency,
             "gpu_utilization_percent": request_gpu_utilization,
             "gpu_capacity": GPU_CAPACITY,
+            "llm_model": OLLAMA_MODEL,
             "success": True
         }
     except Exception as error:
@@ -109,6 +111,7 @@ def process_request(request: RequestModel):
             "latency": latency,
             "gpu_utilization_percent": request_gpu_utilization,
             "gpu_capacity": GPU_CAPACITY,
+            "llm_model": OLLAMA_MODEL,
             "success": False
         }
     finally:
@@ -141,6 +144,7 @@ def health_check():
         "status": "alive",
         "worker_id": WORKER_ID,
         "master_id": MASTER_ID,
+        "llm_model": OLLAMA_MODEL,
         **metrics
     }
 
@@ -156,4 +160,4 @@ if __name__ == "__main__":
     WORKER_ID = args.id
     MASTER_ID = args.master_id
 
-    uvicorn.run(app, host="127.0.0.1", port=args.port)
+    uvicorn.run(app, host=SERVICE_HOST, port=args.port)

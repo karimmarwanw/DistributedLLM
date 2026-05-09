@@ -15,4 +15,5 @@ class ResponseModel(BaseModel):
     latency: float
     gpu_utilization_percent: float | None = None
     gpu_capacity: int | None = None
+    llm_model: str | None = None
     success: bool

@@ -9,26 +9,41 @@ from common.models import RequestModel
 
 app = FastAPI()
 
-masters = [
-    {
-        "id": 0,
-        "url": "http://127.0.0.1:8001",
-        "alive": True,
-        "active_tasks": 0,
-        "total_requests": 0,
-        "in_flight": 0,
-        "assigned_requests": 0
-    },
-    {
-        "id": 1,
-        "url": "http://127.0.0.1:8002",
+SERVICE_HOST = os.getenv("SERVICE_HOST", "127.0.0.1")
+DEFAULT_MASTER_URLS = "0:http://127.0.0.1:8001,1:http://127.0.0.1:8002"
+
+
+def make_master(master_id, url):
+    return {
+        "id": master_id,
+        "url": url.rstrip("/"),
         "alive": True,
         "active_tasks": 0,
         "total_requests": 0,
         "in_flight": 0,
         "assigned_requests": 0
     }
-]
+
+
+def parse_master_urls(master_urls):
+    configured_masters = []
+
+    for item in master_urls.split(","):
+        item = item.strip()
+
+        if not item:
+            continue
+
+        master_id, master_url = item.split(":", 1)
+        configured_masters.append(make_master(int(master_id), master_url))
+
+    if not configured_masters:
+        raise ValueError("MASTER_URLS must define at least one master.")
+
+    return configured_masters
+
+
+masters = parse_master_urls(os.getenv("MASTER_URLS", DEFAULT_MASTER_URLS))
 
 current_master_index = 0
 master_index_lock = threading.Lock()
@@ -263,5 +278,18 @@ def change_strategy(strategy_name: str):
     }
 
 
+@app.post("/simulate/reset-round-robin")
+def reset_round_robin(index: int = 0):
+    global current_master_index
+
+    with master_index_lock:
+        current_master_index = max(0, index)
+
+    return {
+        "success": True,
+        "current_master_index": current_master_index
+    }
+
+
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host=SERVICE_HOST, port=8000)

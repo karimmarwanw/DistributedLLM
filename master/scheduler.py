@@ -10,6 +10,8 @@ from common.models import RequestModel
 
 app = FastAPI()
 
+SERVICE_HOST = os.getenv("SERVICE_HOST", "127.0.0.1")
+WORKER_HOST = os.getenv("WORKER_HOST", "127.0.0.1")
 MASTER_ID = 0
 workers = []
 current_worker_index = 0
@@ -118,6 +120,25 @@ def mark_worker_failed(worker):
     worker["alive"] = False
 
 
+def parse_worker_spec(item):
+    worker_id, worker_address = item.split(":", 1)
+
+    if worker_address.startswith(("http://", "https://")):
+        worker_url = worker_address.rstrip("/")
+    else:
+        worker_url = f"http://{WORKER_HOST}:{worker_address}"
+
+    return {
+        "id": int(worker_id),
+        "url": worker_url,
+        "alive": True,
+        "active_tasks": 0,
+        "total_requests": 0,
+        "gpu_utilization_percent": 0,
+        "gpu_capacity": None
+    }
+
+
 @app.post("/schedule")
 def schedule_request(request: RequestModel):
     begin_task()
@@ -206,6 +227,20 @@ def simulate_fail_during_next_schedule(
     }
 
 
+@app.post("/simulate/reset-worker-round-robin")
+def reset_worker_round_robin(index: int = 0):
+    global current_worker_index
+
+    with worker_index_lock:
+        current_worker_index = max(0, index)
+
+    return {
+        "success": True,
+        "master_id": MASTER_ID,
+        "current_worker_index": current_worker_index
+    }
+
+
 @app.get("/health")
 def health_check():
     metrics = current_metrics()
@@ -231,13 +266,6 @@ if __name__ == "__main__":
     workers = []
 
     for item in args.workers:
-        worker_id, worker_port = item.split(":")
-        workers.append({
-            "id": int(worker_id),
-            "url": f"http://127.0.0.1:{worker_port}",
-            "alive": True,
-            "active_tasks": 0,
-            "total_requests": 0
-        })
+        workers.append(parse_worker_spec(item))
 
-    uvicorn.run(app, host="127.0.0.1", port=args.port)
+    uvicorn.run(app, host=SERVICE_HOST, port=args.port)

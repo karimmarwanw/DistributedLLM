@@ -341,7 +341,3 @@ OLLAMA_MODEL=qwen2.5:3b ./scripts/start_ollama_system.sh
 ## Documentation
 
 See [docs/PROJECT_REPORT.md](docs/PROJECT_REPORT.md) for the full report-style explanation of the problem, design, implementation, testing approach, limitations, and future work.
-
-See [docs/CODE_REVIEW.md](docs/CODE_REVIEW.md) for code-review notes, risks, and recommended improvements before final submission.
-
-The submission-ready PDF report is available at [docs/DistributedLLM_Project_Report.pdf](docs/DistributedLLM_Project_Report.pdf).
